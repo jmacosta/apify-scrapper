@@ -1,8 +1,9 @@
-const { chromium } = require('playwright');
+// src/main.js
+import { chromium } from 'playwright';
 
 (async () => {
   const browser = await chromium.launch({
-    headless: true,
+    headless: true, // usar false solo para depuración local
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
@@ -10,39 +11,41 @@ const { chromium } = require('playwright');
   const page = await context.newPage();
 
   try {
-    console.log('Navegando a la página principal...');
-    await page.goto('https://contrataciondelestado.es/wps/portal/plataforma/buscadores/busqueda/', {
-      waitUntil: 'networkidle',
-    });
+    console.log('🌐 Navegando al portal de contratación...');
+    await page.goto(
+      'https://contrataciondelestado.es/wps/portal/plataforma/inicio/!ut/p/z1/04_Sj9CPykssy0xPLMnMz0vMAfIjo8zinYItLBydDB0NDIxDLQwczQIDnS1dDIwMLI31wwkpiAJKG-AAjgZA_VFgJabGziZhXmEBZsGe7gYGnh5uLj6hhqYG7kZmUAV4zCjIjTDIdFRUBAD_nKPx/dz/d5/L2dBISEvZ0FBIS9nQSEh/',
+      { waitUntil: 'networkidle' }
+    );
 
-    // ===============================
-    // === SECCIÓN GRABADA (recorded.js)
-    // ===============================
-    await page.getByRole('button', { name: 'Abrir buscador CPV' }).click();
+    // === Pasos grabados desde recorded.js ===
+    await page.getByRole('link', { name: 'Buscadores Licitaciones,' }).click();
+    await page.getByRole('link', { name: 'Licitaciones Búsqueda de' }).click();
+    await page.getByRole('link', { name: 'Selección CPV' }).click();
 
-    const popup = await page.waitForEvent('popup');
-    await popup.getByPlaceholder('Buscar por código o descripción').click();
-    await popup.getByPlaceholder('Buscar por código o descripción').fill('79');
-    await popup.getByRole('button', { name: 'Buscar' }).click();
+    // Ejemplo: seleccionando CPV de marketing y publicidad
+    await page.locator('#j_a0_40').click();
+    await page.locator('#j_a0_48').click();
+    await page.locator('#j_a0_58').click();
+    await page.locator('#j_a0_59').click();
+    await page.getByRole('link', { name: 'Carpeta 79341100-Servicios de' }).click();
+    await page.getByRole('link', { name: 'Carpeta 79341200-Servicios de' }).click();
+    await page.getByRole('link', { name: 'Carpeta 79341400-Servicios de' }).click();
+    await page.locator('#j_a0_60').click();
+    await page.getByRole('link', { name: 'Carpeta cerrada 79342300-' }).click();
+    await page.getByRole('button', { name: 'Aceptar' }).click();
 
-    await popup.waitForSelector('tbody tr td:first-child'); // esperar resultados
-    await popup.getByRole('cell', { name: '79', exact: true }).click();
-    await popup.getByRole('button', { name: 'Aceptar' }).click();
+    // Estado = Publicado
+    await page.getByLabel('Estado').selectOption('PUB');
 
-    // Cierra el popup automáticamente cuando desaparece
-    await popup.close().catch(() => {});
+    // Iniciar búsqueda
+    await page.locator(
+      'input[name="viewns_Z7_AVEQAI930OBRD02JPMTPG21004_:form1:button1"]'
+    ).click();
 
-    console.log('CPV seleccionado correctamente.');
-
-    // Click en botón buscar
-    await page.getByRole('button', { name: 'Buscar' }).click();
-
-    // ===============================
-    // === EXTRACCIÓN DE RESULTADOS
-    // ===============================
-    console.log('Esperando resultados...');
+    console.log('🔍 Esperando resultados de licitaciones...');
     await page.waitForSelector('table#myTablaBusquedaCustom > tbody > tr', { timeout: 60000 });
 
+    // Extraer datos
     const rows = await page.$$eval('table#myTablaBusquedaCustom > tbody > tr', trs =>
       trs.map(tr => {
         const expediente = tr.querySelector('td:first-child span')?.innerText?.trim() || '';
@@ -59,13 +62,9 @@ const { chromium } = require('playwright');
     console.log(`✅ ${rows.length} licitaciones extraídas.`);
     console.log(JSON.stringify(rows, null, 2));
 
-    // === OPCIONAL: guarda dataset (para Apify)
-    // const dataset = await Apify.openDataset();
-    // await dataset.pushData(rows);
-
   } catch (err) {
     console.error('❌ Error durante la ejecución:', err);
-    throw err;
+    process.exitCode = 1;
   } finally {
     await browser.close();
   }
