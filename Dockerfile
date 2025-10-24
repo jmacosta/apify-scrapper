@@ -1,22 +1,29 @@
-FROM apify/actor-node-playwright-chrome:latest
+# Usar imagen base oficial de Node (ligera y compatible con Playwright)
+FROM node:20-slim
 
-# Crear y establecer el directorio de trabajo
-WORKDIR /app
+# Crear usuario no root
+RUN useradd -m myuser
 
-# Copiar archivos con los permisos adecuados
-COPY --chown=myuser:myuser package*.json ./
+# Crear directorio de trabajo dentro del home del usuario
+WORKDIR /home/myuser/app
 
-# Instalar dependencias con permisos elevados
-RUN npm install --unsafe-perm=true
+# Copiar archivos package.json y package-lock.json con permisos correctos
+COPY package*.json ./
+
+# Cambiar propietario de los archivos al usuario
+RUN chown -R myuser:myuser /home/myuser/app
+
+# Cambiar a usuario no root
+USER myuser
+
+# Instalar dependencias npm
+RUN npm install
 
 # Copiar el resto de los archivos
-COPY --chown=myuser:myuser . ./
+COPY . .
 
-# Instalar los navegadores necesarios
+# Instalar navegadores Playwright
 RUN npx playwright install
-
-# Establecer el usuario adecuado
-USER myuser
 
 # Comando para ejecutar la aplicación
 CMD ["node", "src/main.js"]
