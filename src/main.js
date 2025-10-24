@@ -1,46 +1,72 @@
-
-
-
-import { chromium } from 'playwright';
-import fs from 'fs/promises';
+const { chromium } = require('playwright');
 
 (async () => {
-    // URL inicial de la búsqueda de licitaciones
-    const START_URL = 'https://contrataciondelestado.es/wps/portal/plataforma/buscadores/busqueda/!ut/p/z1/jY9LT8MwEIR_C4dcvVvnARzTPF0VNRCcNL5UbgnIKK5DHvx-DOq1oXub1TczuyBgD-Isv9WHnJQ5y87qRgQHL9lFUZpTfCjdGOk25jzIrcx8qP8A3428alMVQckyRJan8ZavfMxoAOIWP16ZEG_zLwBiOb4GsVxBL8DSi_-VNPbI-0NYJc8he3Rxt36xFZvi6bXI6ArRg_I342Q0UUdN3uWpHUlvhqlrJ1KxpGYxNA5-jr2Dx3n8mts36WBqBj13clBmfdkRS0CvOd-jKrQO734AYHmecg!!/dz/d5/L2dBISEvZ0FBIS9nQSEh/p0/IZ7_AVEQAI930OBRD02JPMTPG21004=CZ6_4EOCCFH208S3D02LDUU6HH20G5=LA0=Ecom.ibm.faces.portlet.VIEWID!QCPjspQCPbusquedaQCPFormularioBusqueda.jsp==/#Z7_AVEQAI930OBRD02JPMTPG21004';
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
 
-    // Lanzar navegador Chromium en modo headless
-    const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
-    const page = await context.newPage();
+  const context = await browser.newContext();
+  const page = await context.newPage();
 
-    console.log(`Navegando a: ${START_URL}`);
-    await page.goto(START_URL, { waitUntil: 'domcontentloaded' });
-
-    // Esperar a que cargue la tabla principal
-    await page.waitForSelector('table#myTablaBusquedaCustom > tbody > tr');
-
-    // Extraer licitaciones
-    const licitaciones = await page.$$eval('table#myTablaBusquedaCustom > tbody > tr', rows => {
-        return rows.map(row => {
-            const celdas = row.querySelectorAll('td');
-            const tituloDiv = celdas[0].querySelector('div:not(.cell-order)');
-            const enlace = celdas[0].querySelector('a[target="_blank"]')?.href || null;
-            return {
-                titulo: tituloDiv?.textContent.trim() || '',
-                enlace,
-                tipo: celdas[1]?.textContent.trim() || '',
-                estado: celdas[2]?.textContent.trim() || '',
-                presupuesto: celdas[3]?.textContent.trim() || '',
-                fecha: celdas[4]?.textContent.trim() || ''
-            };
-        });
+  try {
+    console.log('Navegando a la página principal...');
+    await page.goto('https://contrataciondelestado.es/wps/portal/plataforma/buscadores/busqueda/', {
+      waitUntil: 'networkidle',
     });
 
-    console.log(`Se encontraron ${licitaciones.length} licitaciones.`);
-    
-    // Guardar resultados en JSON
-    await fs.writeFile('licitaciones.json', JSON.stringify(licitaciones, null, 2));
-    console.log('Archivo licitaciones.json guardado.');
+    // ===============================
+    // === SECCIÓN GRABADA (recorded.js)
+    // ===============================
+    await page.getByRole('button', { name: 'Abrir buscador CPV' }).click();
 
+    const popup = await page.waitForEvent('popup');
+    await popup.getByPlaceholder('Buscar por código o descripción').click();
+    await popup.getByPlaceholder('Buscar por código o descripción').fill('79');
+    await popup.getByRole('button', { name: 'Buscar' }).click();
+
+    await popup.waitForSelector('tbody tr td:first-child'); // esperar resultados
+    await popup.getByRole('cell', { name: '79', exact: true }).click();
+    await popup.getByRole('button', { name: 'Aceptar' }).click();
+
+    // Cierra el popup automáticamente cuando desaparece
+    await popup.close().catch(() => {});
+
+    console.log('CPV seleccionado correctamente.');
+
+    // Click en botón buscar
+    await page.getByRole('button', { name: 'Buscar' }).click();
+
+    // ===============================
+    // === EXTRACCIÓN DE RESULTADOS
+    // ===============================
+    console.log('Esperando resultados...');
+    await page.waitForSelector('table#myTablaBusquedaCustom > tbody > tr', { timeout: 60000 });
+
+    const rows = await page.$$eval('table#myTablaBusquedaCustom > tbody > tr', trs =>
+      trs.map(tr => {
+        const expediente = tr.querySelector('td:first-child span')?.innerText?.trim() || '';
+        const descripcion = tr.querySelector('td:first-child > div:not(.cell-order)')?.innerText?.trim() || '';
+        const tipo = tr.querySelector('td:nth-child(2)')?.innerText?.trim() || '';
+        const estado = tr.querySelector('td:nth-child(3)')?.innerText?.trim() || '';
+        const importe = tr.querySelector('td:nth-child(4)')?.innerText?.trim() || '';
+        const presentacion = tr.querySelector('td:nth-child(5)')?.innerText?.trim() || '';
+        const organismo = tr.querySelector('td:nth-child(6)')?.innerText?.trim() || '';
+        return { expediente, descripcion, tipo, estado, importe, presentacion, organismo };
+      })
+    );
+
+    console.log(`✅ ${rows.length} licitaciones extraídas.`);
+    console.log(JSON.stringify(rows, null, 2));
+
+    // === OPCIONAL: guarda dataset (para Apify)
+    // const dataset = await Apify.openDataset();
+    // await dataset.pushData(rows);
+
+  } catch (err) {
+    console.error('❌ Error durante la ejecución:', err);
+    throw err;
+  } finally {
     await browser.close();
+  }
 })();
