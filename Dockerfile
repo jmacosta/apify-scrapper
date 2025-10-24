@@ -1,16 +1,22 @@
 FROM apify/actor-node-playwright-chrome:latest
 
-# Directorio de trabajo dentro del home del usuario node
-WORKDIR /home/node/app
+# Crear y establecer el directorio de trabajo
+WORKDIR /app
 
-# Copiar package.json
-COPY package*.json ./
+# Copiar archivos con los permisos adecuados
+COPY --chown=myuser:myuser package*.json ./
 
-# Instalar dependencias como node
-RUN npm install
+# Instalar dependencias con permisos elevados
+RUN npm install --unsafe-perm=true
 
-# Copiar el resto del código
-COPY --chown=node:node . .
+# Copiar el resto de los archivos
+COPY --chown=myuser:myuser . ./
 
-# Comando por defecto
-CMD ["node", "main.js"]
+# Instalar los navegadores necesarios
+RUN npx playwright install
+
+# Establecer el usuario adecuado
+USER myuser
+
+# Comando para ejecutar la aplicación
+CMD ["node", "src/main.js"]
