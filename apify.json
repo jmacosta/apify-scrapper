@@ -1,0 +1,11 @@
+{
+  "name": "pcsp-scraper",
+  "version": "1.0",
+  "buildTag": "latest",
+  "env": {
+    "APIFY_MEMORY_MBYTES": 2048,
+    "APIFY_HEADLESS": "1"
+  },
+  "defaultDatasetId": "PCSP_RESULTS",
+  "defaultKeyValueStoreId": "default"
+}
