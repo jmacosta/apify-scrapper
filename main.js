@@ -1,57 +1,59 @@
-import { PlaywrightCrawler, Dataset, log } from 'crawlee';
 
-log.setLevel(log.LEVELS.INFO);
+
+
+import { PlaywrightCrawler, Dataset, log } from 'apify';
 
 const START_URL = 'https://contrataciondelestado.es/wps/myportal/plataforma/buscadores/busqueda';
 
-// Configuración principal
 const crawler = new PlaywrightCrawler({
-  maxRequestsPerCrawl: 3,
-  maxConcurrency: 1,
-  launchContext: {
-    launchOptions: {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-  },
+    launchContext: {
+        launchOptions: {
+            headless: true, // Cambiar a false si quieres ver el navegador
+        },
+    },
+    maxRequestsPerCrawl: 1000,
+    requestHandler: async ({ page, request, enqueueLinks, log }) => {
+        log.info(`Procesando página: ${request.url}`);
 
-  async requestHandler({ page, request }) {
-    log.info(`Abriendo: ${request.url}`);
+        // Esperamos a que la tabla cargue
+        await page.waitForSelector('table#myTablaBusquedaCustom > tbody > tr');
 
-    await page.goto(START_URL, { waitUntil: 'networkidle' });
+        // Extraemos las filas
+        const rows = await page.$$('table#myTablaBusquedaCustom > tbody > tr');
 
-    // Esperar el iframe donde están los resultados
-    await page.waitForSelector('iframe[id*="busquedaFrame"], iframe[src*="busqueda"]', { timeout: 15000 });
+        for (const row of rows) {
+            const title = await row.$eval('td:first-child > div:not(.cell-order)', el => el.textContent.trim());
+            const link = await row.$eval('td:first-child a[target="_blank"]', el => el.href);
+            const tipo = await row.$eval('td:nth-child(2)', el => el.textContent.trim());
+            const estado = await row.$eval('td:nth-child(3)', el => el.textContent.trim());
+            const presupuesto = await row.$eval('td:nth-child(4)', el => el.textContent.trim());
+            const fecha = await row.$eval('td:nth-child(5)', el => el.textContent.trim());
 
-    const frames = page.frames();
-    const targetFrame = frames.find(f => f.url().includes('busqueda') || f.name().includes('busqueda'));
-    if (!targetFrame) {
-      log.error('❌ No se encontró el iframe con los resultados.');
-      return;
-    }
+            await Dataset.pushData({
+                title,
+                link,
+                tipo,
+                estado,
+                presupuesto,
+                fecha,
+            });
+        }
 
-    // Esperar tabla de resultados
-    await targetFrame.waitForSelector('.tablaResultado tbody tr', { timeout: 15000 });
-
-    // Extraer datos de las licitaciones
-    const data = await targetFrame.$$eval('.tablaResultado tbody tr', rows => {
-      return rows.map(r => ({
-        titulo: r.querySelector('td:nth-child(2) a')?.innerText?.trim(),
-        enlace: r.querySelector('td:nth-child(2) a')?.href,
-        fecha_publicacion: r.querySelector('td:nth-child(3)')?.innerText?.trim(),
-        estado: r.querySelector('td:nth-child(4)')?.innerText?.trim(),
-        organo_contratacion: r.querySelector('td:nth-child(5)')?.innerText?.trim(),
-      }));
-    });
-
-    log.info(`✅ ${data.length} licitaciones extraídas.`);
-    await Dataset.pushData(data);
-  },
-
-  failedRequestHandler({ request }) {
-    log.error(`❌ Falló la petición: ${request.url}`);
-  },
+        // Paginar: buscamos botón "Siguiente" habilitado
+        const nextBtn = await page.$('input[name="viewns_Z7_AVEQAI930OBRD02JPMTPG21004_:form1:footerSiguiente"]:not([disabled])');
+        if (nextBtn) {
+            log.info('Pasando a la siguiente página...');
+            await Promise.all([
+                page.waitForNavigation({ waitUntil: 'networkidle' }),
+                nextBtn.click(),
+            ]);
+            // Reprocesamos la misma página para la siguiente iteración
+            return request.queue.addRequest({ url: request.url });
+        } else {
+            log.info('No hay más páginas.');
+        }
+    },
 });
 
 await crawler.run([START_URL]);
-log.info('🟢 Scraping completado.');
+log.info('Crawler finalizado.');
