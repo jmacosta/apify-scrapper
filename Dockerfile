@@ -1,20 +1,21 @@
-# Usamos la imagen con Node.js y Playwright Chromium ya preinstalado
 FROM apify/actor-node-playwright-chrome:latest
 
-# Directorio de trabajo
+# Crear directorio de trabajo y asignar permisos
+RUN mkdir -p /app
 WORKDIR /app
+RUN chown -R node:node /app
 
-# Copiamos package.json y package-lock.json primero para cachear dependencias
+# Cambiar al usuario node (apify images usan node como user no root)
+USER node
+
+# Copiar package.json y package-lock.json
 COPY package*.json ./
 
-# Instalamos dependencias
+# Instalar dependencias
 RUN npm install
 
-# Copiamos el resto del código
-COPY . .
+# Copiar el resto del código
+COPY --chown=node:node . .
 
-# Instalamos dependencias de Playwright y navegadores
-RUN npx playwright install --with-deps
-
-# Comando para ejecutar tu actor
+# Comando por defecto
 CMD ["node", "main.js"]
