@@ -1,17 +1,12 @@
 FROM apify/actor-node-playwright-chrome:latest
 
-# Crear directorio de trabajo y asignar permisos
-RUN mkdir -p /app
-WORKDIR /app
-RUN chown -R node:node /app
+# Directorio de trabajo dentro del home del usuario node
+WORKDIR /home/node/app
 
-# Cambiar al usuario node (apify images usan node como user no root)
-USER node
-
-# Copiar package.json y package-lock.json
+# Copiar package.json
 COPY package*.json ./
 
-# Instalar dependencias
+# Instalar dependencias como node
 RUN npm install
 
 # Copiar el resto del código
