@@ -1,29 +1,48 @@
-# Usar imagen base oficial de Node (ligera y compatible con Playwright)
-FROM node:20-slim
+FROM apify/actor-node-playwright-chrome:latest
 
-# Crear usuario no root
-RUN useradd -m myuser
+# Instalar librerías necesarias para Playwright
+USER root
+RUN apt-get update && \
+    apt-get install -y \
+        libglib2.0-0 \
+        libgobject-2.0-0 \
+        libnspr4 \
+        libnss3 \
+        libnssutil3 \
+        libdbus-1-3 \
+        libgio2.0-0 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libexpat1 \
+        libatspi2.0-0 \
+        libx11-6 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libxcb1 \
+        libxkbcommon0 \
+        libasound2 \
+        --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
-# Crear directorio de trabajo dentro del home del usuario
-WORKDIR /home/myuser/app
+# Crear y establecer el directorio de trabajo
+WORKDIR /app
 
-# Copiar archivos package.json y package-lock.json con permisos correctos
-COPY package*.json ./
-
-# Cambiar propietario de los archivos al usuario
-RUN chown -R myuser:myuser /home/myuser/app
-
-# Cambiar a usuario no root
-USER myuser
-
-# Instalar dependencias npm
-RUN npm install
+# Copiar archivos con los permisos adecuados
+COPY --chown=myuser:myuser package*.json ./
+RUN npm install --unsafe-perm=true
 
 # Copiar el resto de los archivos
-COPY . .
+COPY --chown=myuser:myuser . ./
 
-# Instalar navegadores Playwright
+# Instalar navegadores necesarios
 RUN npx playwright install
 
-# Comando para ejecutar la aplicación
+# Establecer usuario
+USER myuser
+
+# Ejecutar la aplicación
 CMD ["node", "src/main.js"]
