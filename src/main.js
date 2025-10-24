@@ -19,9 +19,39 @@ import { chromium } from "playwright";
     console.log("🌍 Página principal cargada.");
 
     // Primer click: abrir menú “Buscadores Licitaciones”
-    console.log("🧭 Abriendo 'Buscadores Licitaciones'...");
-    await page.getByRole("link", { name: "Buscadores Licitaciones," }).click();
-    await page.waitForLoadState("networkidle");
+   console.log("🔍 Intentando abrir 'Licitaciones - Búsqueda'...");
+
+// Esperar si se abre en popup
+const [popup] = await Promise.all([
+  page.waitForEvent('popup').catch(() => null),
+  page.locator('a:has-text("Licitaciones")').click({ timeout: 60000 }).catch(() => null)
+]);
+
+if (popup) {
+  console.log("🪟 Se abrió una nueva pestaña (popup). Usando esa página...");
+  await popup.waitForLoadState("networkidle");
+  const newPage = popup;
+  await newPage.screenshot({ path: "popup.png", fullPage: true });
+  console.log("📸 Captura del popup guardada como 'popup.png'");
+} else {
+  console.log("ℹ️ No se detectó popup, verificando si el contenido está en un iframe...");
+  const frames = page.frames();
+  console.log(`🧩 Se detectaron ${frames.length} iframes.`);
+  for (const frame of frames) {
+    try {
+      const link = await frame.waitForSelector('a:has-text("Licitaciones")', { timeout: 5000 });
+      if (link) {
+        console.log("✅ Enlace encontrado dentro de un iframe. Haciendo click...");
+        await link.click();
+        await frame.waitForLoadState("networkidle");
+        break;
+      }
+    } catch (e) {}
+  }
+}
+
+console.log("✅ Continuando con la carga de la página de licitaciones...");
+
     console.log("✅ Menú de buscadores cargado.");
 
     // Segundo click: abrir “Licitaciones Búsqueda de”
