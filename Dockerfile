@@ -1,16 +1,17 @@
+# Usamos una imagen base de Apify con Node.js y Playwright
 FROM apify/actor-node-playwright-chrome:latest
 
-# Instalar librerías necesarias para Playwright
+# Cambiamos a root para instalar dependencias del sistema
 USER root
+
+# Instalar librerías del sistema necesarias para Chromium/Playwright
 RUN apt-get update && \
     apt-get install -y \
         libglib2.0-0 \
-        libgobject-2.0-0 \
+        libglib2.0-bin \
         libnspr4 \
         libnss3 \
-        libnssutil3 \
         libdbus-1-3 \
-        libgio2.0-0 \
         libatk1.0-0 \
         libatk-bridge2.0-0 \
         libexpat1 \
@@ -31,18 +32,20 @@ RUN apt-get update && \
 # Crear y establecer el directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos con los permisos adecuados
+# Copiar los package.json con permisos correctos
 COPY --chown=myuser:myuser package*.json ./
+
+# Instalar dependencias de Node.js con permisos elevados
 RUN npm install --unsafe-perm=true
 
-# Copiar el resto de los archivos
-COPY --chown=myuser:myuser . ./
+# Copiar el resto del código con permisos adecuados
+COPY --chown=myuser:myuser . .
 
-# Instalar navegadores necesarios
+# Instalar navegadores necesarios para Playwright
 RUN npx playwright install
 
-# Establecer usuario
+# Volver a usuario no root
 USER myuser
 
-# Ejecutar la aplicación
+# Comando para ejecutar la aplicación
 CMD ["node", "src/main.js"]
