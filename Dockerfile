@@ -1,6 +1,5 @@
 # Usamos la imagen con Node.js y Playwright Chromium ya preinstalado
-FROM ghcr.io/apify/actor-node-playwright:latest
-
+FROM apify/actor-node-playwright-chrome:latest
 
 # Directorio de trabajo
 WORKDIR /app
